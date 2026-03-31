@@ -2,6 +2,7 @@ import requests
 import json
 from dotenv import load_dotenv
 import os
+from collections import defaultdict
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -34,6 +35,9 @@ assignment_data = assignment_response.json()
 group_response = requests.get(f"{CONSTRUCT}/{GET[2]}", headers=headers, params=params_groups)
 group_data = group_response.json()
 
+enrollment_response = requests.get(f"{CONSTRUCT}/{GET[3]}", headers=headers, params=params_enrollments)
+enrollment_data = enrollment_response.json()
+
 # print(json.dumps(group_data, indent=2))
 
 assignment_map = {a["id"] : a for a in assignment_data}
@@ -49,11 +53,48 @@ for s in submission_data:
         group = group_map.get(group_id)
 
         # print(assignment["name"], "| Group ID:", assignment["assignment_group_id"])
-        print(assignment["name"], "| Group Name:", group["name"], "| Weight:", group["group_weight"])
+        # print(assignment["name"], "| Group Name:", group["name"], "| Weight:", group["group_weight"])
 
 
+# # accumulate points per group
+# group_points = defaultdict(lambda: {"earned": 0, "possible": 0})
+group_points = {}
 
+for id, g in group_map.items():
+    group_points[g["id"]] = {"weight" : g["group_weight"], "id" : g["name"], "earned": 0, "possible": 0}
 
-# ASSIGNMENT GROUPS FOR LOOP
-# for group in data:
-#     print(group["name"], "| Weight:", group.get("group_weight"))
+for s in submission_data:
+    assignment = assignment_map.get(s["assignment_id"])
+    if not assignment:
+        continue
+
+    # skip ungraded/missing
+    if (s["workflow_state"] != "graded" or s["score"] is None):
+        continue
+
+    group_id = assignment["assignment_group_id"]
+    group_points[group_id]["earned"] += s["score"]
+    group_points[group_id]["possible"] += assignment["points_possible"]
+
+# calculate weighted grade
+total_grade = 0
+
+print(group_points)
+
+print("Category Breakdown:")
+for group_id, points in group_points.items():
+    group = group_map.get(group_id)
+    if (not group):
+        continue
+    if (points["earned"] == 0 and points["possible"] == 0):
+        category_pct = 100
+    else:
+        category_pct = (points["earned"] / points["possible"]) * 100
+    weight = group["group_weight"]
+    
+    contribution = (category_pct * weight) / 100
+    total_grade += contribution
+
+    print(f" {group['name']}: {category_pct:.1f}% (weight: {weight}%) → contributes {contribution:.1f}%")
+
+print(f"\nOverall: {total_grade:.1f}%")
