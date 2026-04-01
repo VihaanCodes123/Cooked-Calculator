@@ -8,11 +8,11 @@ from datetime import datetime, timezone
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
-COURSE_ID = os.getenv("COURSE_ID")
+COURSE_IDS = os.getenv("COURSE_ID").split(",")
 
 BASE_URL = "https://smuhsd.instructure.com/api/v1"
 
-CONSTRUCT = f"{BASE_URL}/courses/{COURSE_ID[3]}"
+CONSTRUCT = f"{BASE_URL}/courses/{COURSE_IDS[3]}"
 
 
 GET = ["assignments", "students/submissions", "assignment_groups", "enrollments"] # what can be called from api
