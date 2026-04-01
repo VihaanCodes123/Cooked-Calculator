@@ -12,7 +12,7 @@ COURSE_IDS = os.getenv("COURSE_ID").split(",")
 
 BASE_URL = "https://smuhsd.instructure.com/api/v1"
 
-CONSTRUCT = f"{BASE_URL}/courses/{COURSE_IDS[3]}"
+CONSTRUCT = f"{BASE_URL}/courses/{COURSE_IDS[0]}"
 
 
 GET = ["assignments", "students/submissions", "assignment_groups", "enrollments"] # what can be called from api
@@ -45,11 +45,12 @@ enrollment_data = enrollment_response.json()
 assignment_map = {a["id"] : a for a in assignment_data}
 group_map = {g["id"] : g for g in group_data}
 
-print(group_map)
+# print(group_map)
 
-if all(g["group_weight"] == 0 for g in group_map.values()):
-    for g in group_map:
-        group_map[g]["group_weight"] = 100/len(group_map)
+# if all(g["group_weight"] == 0 for g in group_map.values()):
+#     for gID in group_map:
+#         group_map[gID]["group_weight"] = None
+    
 
 for s in submission_data:
     assignment = assignment_map.get(s["assignment_id"]) # conversion of submission to assignment (to get category ID)
@@ -87,21 +88,40 @@ for s in submission_data:
 # calculate weighted grade
 total_grade = 0
 
-print("Category Breakdown:")
-for group_id, points in group_points.items():
-    group = group_map.get(group_id)
-    if (not group):
-        continue
-    if (points["earned"] == 0 and points["possible"] == 0):
-        category_pct = 100
-    else:
-        category_pct = (points["earned"] / points["possible"]) * 100
-    weight = group["group_weight"]
-    
-    contribution = (category_pct * weight) / 100
-    total_grade += contribution
+# unweighted calculation
+if all(g["group_weight"] == 0 for g in group_map.values()):
+    total_earned = total_possible = 0
 
-    print(f" {group['name']}: {category_pct:.1f}% (weight: {weight}%) → contributes {contribution:.1f}%")
+    for group_id, points in group_points.items():
+        if (not group):
+            continue
+        total_earned += points["earned"]
+        total_possible += points["possible"]
+    total_grade = (total_earned/total_possible) * 100
+
+# weighted calculation
+else:
+    total_weight = 0
+    print("Category Breakdown:")
+    for group_id, points in group_points.items():
+        group = group_map.get(group_id)
+        if (not group):
+            continue
+        if (points["possible"] == 0):
+            del group_points[group_id]
+            continue
+        total_weight += group["group_weight"]
+
+    print(group_points)
+
+    for group_id, points in group_points.items():
+        category_pct = (points["earned"] / points["possible"]) * 100
+        weight = group["group_weight"] / (total_weight/100) 
+        contribution = (category_pct * weight) / 100
+
+        total_grade += contribution
+
+        print(f" {group['name']}: {category_pct:.1f}% (weight: {weight}%) → contributes {contribution:.1f}%")
 
 print(f"\nOverall: {total_grade:.1f}%")
 
