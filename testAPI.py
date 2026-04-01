@@ -3,6 +3,8 @@ import json
 from dotenv import load_dotenv
 import os
 from collections import defaultdict
+from datetime import datetime, timezone
+
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -10,7 +12,7 @@ COURSE_ID = os.getenv("COURSE_ID")
 
 BASE_URL = "https://smuhsd.instructure.com/api/v1"
 
-CONSTRUCT = f"{BASE_URL}/courses/{COURSE_ID}"
+CONSTRUCT = f"{BASE_URL}/courses/{COURSE_ID[3]}"
 
 
 GET = ["assignments", "students/submissions", "assignment_groups", "enrollments"] # what can be called from api
@@ -43,6 +45,12 @@ enrollment_data = enrollment_response.json()
 assignment_map = {a["id"] : a for a in assignment_data}
 group_map = {g["id"] : g for g in group_data}
 
+print(group_map)
+
+if all(g["group_weight"] == 0 for g in group_map.values()):
+    for g in group_map:
+        group_map[g]["group_weight"] = 100/len(group_map)
+
 for s in submission_data:
     assignment = assignment_map.get(s["assignment_id"]) # conversion of submission to assignment (to get category ID)
 
@@ -61,7 +69,7 @@ for s in submission_data:
 group_points = {}
 
 for id, g in group_map.items():
-    group_points[g["id"]] = {"weight" : g["group_weight"], "id" : g["name"], "earned": 0, "possible": 0}
+    group_points[g["id"]] = {"weight" : g["group_weight"], "earned": 0, "possible": 0}
 
 for s in submission_data:
     assignment = assignment_map.get(s["assignment_id"])
@@ -78,8 +86,6 @@ for s in submission_data:
 
 # calculate weighted grade
 total_grade = 0
-
-print(group_points)
 
 print("Category Breakdown:")
 for group_id, points in group_points.items():
@@ -98,3 +104,18 @@ for group_id, points in group_points.items():
     print(f" {group['name']}: {category_pct:.1f}% (weight: {weight}%) → contributes {contribution:.1f}%")
 
 print(f"\nOverall: {total_grade:.1f}%")
+
+
+
+
+
+today = datetime.now(timezone.utc)
+
+upcoming = []
+for s in submission_data:
+    due = s.get("cached_due_date")
+    if due and s["workflow_state"] == "unsubmitted":
+        due_date = datetime.fromisoformat(due.replace("Z", "+00:00"))
+        if due_date > today:
+            upcoming.append(s)
+print(f"Upcoming unsubmitted: {len(upcoming)}")
